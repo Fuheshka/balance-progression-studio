@@ -6,6 +6,21 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (x, d = 2) => (Number.isFinite(x) ? (Math.round(x * 10 ** d) / 10 ** d).toLocaleString('ru-RU') : '∞');
+  // Число для TeX: запятая как десятичный разделитель, в фигурных скобках, чтобы KaTeX не ставил после неё пробел.
+  const tn = (x, d = 3) => (Number.isFinite(x) ? String(Math.round(x * 10 ** d) / 10 ** d).replace('.', '{,}') : '\\infty');
+  const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b === 1 ? one : b >= 2 && b <= 4 ? few : many; };
+
+  // ---------- Формулы ----------
+  function tex(el, src) {
+    src = src ?? el.dataset.tex;
+    if (!window.katex) { el.textContent = el.textContent || src; return; } // без CDN остаётся текстовая версия
+    try { katex.render('\\displaystyle ' + src, el, { throwOnError: false, displayMode: false }); } catch (e) { el.textContent = src; }
+  }
+  const texHTML = (src) => {
+    if (!window.katex) return `<code>${esc(src)}</code>`;
+    try { return katex.renderToString(src, { throwOnError: false }); } catch (e) { return `<code>${esc(src)}</code>`; }
+  };
+  $$('.tex[data-tex]').forEach((el) => tex(el));
 
   // ---------- Состояние ----------
   const KEY = 'bps.state.v1';
@@ -16,8 +31,8 @@
     ttk: { attacker: null, target: null, minRatio: 0.1, mult: 1, own: true, cc: 0, cm: 1.5, aps: 1 },
     economy: {
       start: 1000, steps: 30,
-      sources: [{ name: 'Награды за квесты', amount: 300, growth: 3 }, { name: 'Дроп с мобов', amount: 150, growth: 2 }],
-      sinks: [{ name: 'Ремонт снаряжения', amount: 200, growth: 2 }, { name: 'Магазин', amount: 180, growth: 4 }],
+      sources: [{ name: 'Квесты', amount: 300, growth: 3 }, { name: 'Дроп с мобов', amount: 150, growth: 2 }],
+      sinks: [{ name: 'Ремонт', amount: 200, growth: 2 }, { name: 'Магазин', amount: 180, growth: 4 }],
     },
     tab: 'import', tableKind: 'units',
   };
@@ -43,10 +58,10 @@
     saveTimer = setTimeout(() => {
       try {
         localStorage.setItem(KEY, JSON.stringify(state));
-        $('#save-status').textContent = 'Сохранено в localStorage · ' + new Date().toLocaleTimeString('ru-RU');
+        $('#save-status').textContent = 'Сохранено в ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       } catch (e) {
-        $('#save-status').textContent = 'Не удалось сохранить: ' + e.message;
-        toast('localStorage недоступен: данные не переживут перезагрузку');
+        $('#save-status').textContent = 'Не сохранилось: ' + e.message;
+        toast('Браузер не даёт писать в localStorage. После перезагрузки правки пропадут.');
       }
     }, 300);
   }
@@ -72,36 +87,52 @@
 
   // ---------- Вкладки ----------
   const renderers = {};
+  function moveInk() {
+    const on = $('.tabs button.on'), ink = $('.tabs-ink');
+    if (!on || !ink) return;
+    ink.style.transform = `translateY(${on.offsetTop}px)`;
+    ink.style.height = on.offsetHeight + 'px';
+  }
   function showTab(name) {
     if (!$('#tab-' + name)) name = 'import';
     state.tab = name; save();
     $$('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + name));
     $$('.tabs button').forEach((b) => { b.classList.toggle('on', b.dataset.tab === name); b.setAttribute('aria-selected', b.dataset.tab === name); });
+    const btn = $(`.tabs button[data-tab="${name}"]`);
+    btn && btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    moveInk();
     renderers[name] && renderers[name]();
   }
   $$('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+  window.addEventListener('resize', moveInk);
 
   // ---------- Графики ----------
   const charts = {};
   function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
   function chart(id, config) {
-    if (!window.Chart) { $('#' + id).replaceWith(Object.assign(document.createElement('p'), { className: 'muted', textContent: 'Chart.js не загрузился (нет интернета) — таблица рядом содержит те же данные.' })); return; }
+    if (!window.Chart) { $('#' + id).replaceWith(Object.assign(document.createElement('p'), { className: 'muted small', textContent: 'График не загрузился (нет интернета). Те же числа есть в таблице.' })); return; }
     charts[id] && charts[id].destroy();
     Chart.defaults.color = css('--muted');
-    Chart.defaults.borderColor = css('--border');
+    Chart.defaults.borderColor = css('--rule');
+    Chart.defaults.font.family = css('--mono');
+    Chart.defaults.font.size = 11;
+    Chart.defaults.font.weight = 300;
     charts[id] = new Chart($('#' + id), Object.assign({ options: {} }, config, {
-      options: Object.assign({ responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false } }, config.options),
+      options: Object.assign({
+        responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { cornerRadius: 0, backgroundColor: css('--ink'), titleColor: css('--bg'), bodyColor: css('--bg') } },
+      }, config.options),
     }));
   }
-  const PALETTE = ['#3b6fe0', '#e0803b', '#2fa86a', '#c94f8a', '#8a63d2', '#c4a52b'];
 
-  // ================= 1. Импорт =================
+  // ================= 01 Импорт =================
   const dz = $('#dropzone'), fileInput = $('#file-input');
   dz.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
   ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
   dz.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
-  // Перетаскивание файла мимо зоны не должно открывать его в браузере вместо приложения.
+  // Файл, брошенный мимо зоны, иначе браузер откроет вместо приложения.
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => { e.preventDefault(); if (e.target.closest && !e.target.closest('#dropzone')) { showTab('import'); handleFiles(e.dataTransfer.files); } });
   fileInput.addEventListener('change', () => { handleFiles(fileInput.files); fileInput.value = ''; });
@@ -111,13 +142,13 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       importText(b.dataset.sample, await r.text());
     } catch (e) {
-      report([{ cls: 'err', title: b.dataset.sample + ': не удалось загрузить пример', items: [e.message + '. При открытии через file:// браузер блокирует fetch — перетащите файл из папки data/ вручную.'] }]);
+      report([{ cls: 'err', title: `Не получилось открыть ${b.dataset.sample}`, items: [`${e.message}. Если страница открыта как файл (file://), браузер не пускает к соседним файлам. Перетащите его из папки data вручную.`] }]);
     }
   }));
 
   async function handleFiles(files) {
     for (const f of files) {
-      if (f.size > 5 * 1024 * 1024) { report([{ cls: 'err', title: f.name, items: ['Файл больше 5 МБ'] }]); continue; }
+      if (f.size > 5 * 1024 * 1024) { report([{ cls: 'err', title: f.name, items: ['Файл больше 5 МБ, такой не возьму.'] }]); continue; }
       importText(f.name, await f.text());
     }
   }
@@ -136,6 +167,7 @@
     return headers.includes('chance') ? 'loot' : 'units';
   }
 
+  const errItem = (e) => ({ line: e.line, col: e.col, msg: e.msg });
   let pending = null; // валидные строки файла с ошибками, если пользователь решит импортировать частично
   function importText(name, text) {
     pending = null;
@@ -145,35 +177,37 @@
       parsed = isJSON ? JSON.parse(text.replace(/^﻿/, '')) : C.parseCSV(text);
       type = detectType(name, parsed, isJSON);
     } catch (e) {
-      return report([{ cls: 'err', title: name + ': файл не разобран', items: [e.message] }]);
+      return report([{ cls: 'err', title: `${name} не читается`, items: [e.message] }]);
     }
     try {
       if (type === 'project') return importProject(name, parsed);
       if (type === 'skills') {
         const t = C.layoutSkillTree(parsed);
         state.skills = Array.isArray(parsed) ? { nodes: parsed } : parsed; save();
-        return report([{ cls: t.errors.length ? 'warn' : 'ok', title: `${name}: дерево навыков, узлов ${t.byId.size}`, items: t.errors }], 'skills');
+        return report([{ cls: t.errors.length ? 'warn' : 'ok', title: `${name}: дерево из ${t.byId.size} навыков`, items: t.errors }], 'skills');
       }
       const table = isJSON ? C.parseJSON(text, type) : parsed;
       const append = $('#import-mode').value === 'append';
       const existing = append ? state[type] : [];
-      const all = existing.map((r, i) => Object.assign({}, r, { __line: 'имеющаяся ' + (i + 1) })).concat(table.rows);
+      const all = existing.map((r, i) => Object.assign({}, r, { __line: 'старая ' + (i + 1) })).concat(table.rows);
       const headers = mergeHeaders(append ? state.headers[type] : [], table.headers);
       const v = C.validate(all, type, headers);
       const msgs = [];
-      if (v.warnings.length) msgs.push({ cls: 'warn', title: 'Предупреждения', items: v.warnings.map((w) => `Строка ${w.line}: ${w.msg}`) });
+      if (v.warnings.length) msgs.push({ cls: 'warn', title: 'Обратите внимание', items: v.warnings.map(errItem) });
       if (!v.ok) {
         const badLines = new Set(v.errors.map((e) => e.line));
         const good = v.rows.filter((_, i) => !badLines.has(all[i].__line));
         pending = { type, headers, rows: good };
-        msgs.unshift({ cls: 'err', title: `${name}: ${v.errors.length} ошибок, файл не импортирован`, items: v.errors.map((e) => `Строка ${e.line}${e.col ? ` [${e.col}]` : ''}: ${e.msg}`), partial: good.length && !append ? good.length : 0 });
+        const n = v.errors.length;
+        msgs.unshift({ cls: 'err', title: `${name} не загружен: ${n} ${plural(n, 'ошибка', 'ошибки', 'ошибок')}`, items: v.errors.map(errItem), partial: good.length && !append ? good.length : 0 });
         return report(msgs);
       }
       commit(type, headers, v.rows);
-      msgs.unshift({ cls: 'ok', title: `${name}: импортировано ${table.rows.length} строк (${type === 'units' ? 'юниты' : 'лут'}), всего ${v.rows.length}`, items: [] });
+      const n = table.rows.length;
+      msgs.unshift({ cls: 'ok', title: `${name}: ${n} ${plural(n, 'строка', 'строки', 'строк')}, ${type === 'units' ? 'юниты' : 'лут'}${append ? `, теперь всего ${v.rows.length}` : ''}`, items: [] });
       report(msgs, 'table');
     } catch (e) {
-      report([{ cls: 'err', title: name + ': ошибка импорта', items: [e.message] }]);
+      report([{ cls: 'err', title: `${name} не загружен`, items: [e.message] }]);
     }
   }
   function mergeHeaders(a, b) { const out = a.slice(); b.forEach((h) => { if (!out.includes(h)) out.push(h); }); return out; }
@@ -192,15 +226,17 @@
     state = deepMerge(structuredClone(DEFAULTS), Object.assign({}, p, { app: undefined, version: undefined }));
     delete state.app; delete state.version;
     save();
-    report([{ cls: 'ok', title: `${name}: проект восстановлен — юнитов ${state.units.length}, строк лута ${state.loot.length}`, items: [] }]);
+    report([{ cls: 'ok', title: `Проект из ${name} восстановлен: ${state.units.length} юнитов, ${state.loot.length} строк лута`, items: [] }]);
   }
   function report(msgs, gotoTab) {
+    const li = (x) => (typeof x === 'string' ? `<li>${esc(x)}</li>`
+      : `<li><code>стр. ${esc(x.line)}${x.col ? ' · ' + esc(x.col) : ''}</code>${esc(x.msg)}</li>`);
     $('#import-report').innerHTML = msgs.map((m, i) => `<div class="msg ${m.cls}"><b>${esc(m.title)}</b>
-      ${m.items.length ? `<ul>${m.items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-      ${m.partial ? `<div class="row"><button data-partial>Импортировать только валидные строки (${m.partial})</button></div>` : ''}
-      ${!i && gotoTab ? `<div class="row"><button data-goto="${gotoTab}">Открыть →</button></div>` : ''}</div>`).join('');
+      ${m.items.length ? `<ul>${m.items.map(li).join('')}</ul>` : ''}
+      ${m.partial ? `<div class="row"><button data-partial>загрузить только целые строки (${m.partial})</button></div>` : ''}
+      ${!i && gotoTab ? `<div class="row"><button data-goto="${gotoTab}">открыть</button></div>` : ''}</div>`).join('');
     const p = $('[data-partial]');
-    p && p.addEventListener('click', () => { commit(pending.type, pending.headers, pending.rows); toast(`Импортировано ${pending.rows.length} валидных строк`); showTab('table'); });
+    p && p.addEventListener('click', () => { commit(pending.type, pending.headers, pending.rows); toast(`Загружено строк: ${pending.rows.length}`); showTab('table'); });
     const g = $('[data-goto]');
     g && g.addEventListener('click', () => showTab(g.dataset.goto));
   }
@@ -208,10 +244,10 @@
   $('#btn-export-project').addEventListener('click', exportProject);
   function exportProject() {
     downloadJSON('balance-project.json', Object.assign({ app: 'balance-studio', version: 1 }, state));
-    toast('Проект выгружен в balance-project.json');
+    toast('Скачан balance-project.json');
   }
 
-  // ================= 2. Таблица =================
+  // ================= 02 Таблица =================
   $$('#table-kind button').forEach((b) => b.addEventListener('click', () => { state.tableKind = b.dataset.kind; save(); renderTable(); }));
   $('#table-filter').addEventListener('input', renderTable);
   $('#btn-add-row').addEventListener('click', addRow);
@@ -228,15 +264,15 @@
     inputs[1] && inputs[1].focus();
   }
   $('#btn-add-col').addEventListener('click', () => {
-    const name = (prompt('Название новой колонки (латиница, например crit_chance):') || '').trim();
+    const name = (prompt('Как назвать колонку? Латиницей, например crit_chance') || '').trim();
     if (!name) return;
-    if (!/^[A-Za-z_][\w]*$/.test(name)) return toast('Только латиница, цифры и _');
+    if (!/^[A-Za-z_][\w]*$/.test(name)) return toast('В названии только латиница, цифры и _');
     const k = state.tableKind;
     if (state.headers[k].includes(name)) return toast('Такая колонка уже есть');
     state.headers[k].push(name); save(); renderTable();
   });
   $('#btn-clear').addEventListener('click', () => {
-    if (!confirm('Удалить все строки этой таблицы? Отменить нельзя (сделайте экспорт перед этим).')) return;
+    if (!confirm('Стереть все строки? Вернуть не получится, так что сначала лучше скачать csv.')) return;
     state[state.tableKind] = []; save(); renderTable();
   });
   $('#btn-export-csv').addEventListener('click', () => downloadCSV(state.tableKind + '.csv', state[state.tableKind], state.headers[state.tableKind]));
@@ -255,16 +291,17 @@
     const q = $('#table-filter').value.trim().toLowerCase();
     const numeric = C.SCHEMAS[k].numeric;
     const { v, map } = tableErrors();
+    const n = v.errors.length;
     $('#table-errors').innerHTML = rows.length && !v.ok
-      ? `<div class="msg err"><b>Ошибок: ${v.errors.length}</b> — расчёты используют только корректные строки<ul>${v.errors.slice(0, 50).map((e) => `<li>Строка ${e.line}${e.col ? ` [${e.col}]` : ''}: ${esc(e.msg)}</li>`).join('')}</ul></div>`
-      : rows.length ? '' : '<div class="msg warn">Таблица пуста — импортируйте файл или добавьте строку.</div>';
+      ? `<div class="msg err"><b>${n} ${plural(n, 'ошибка', 'ошибки', 'ошибок')}. Пока не исправите, эти строки не участвуют в расчётах.</b><ul>${v.errors.slice(0, 50).map((e) => `<li><code>стр. ${e.line}${e.col ? ' · ' + esc(e.col) : ''}</code>${esc(e.msg)}</li>`).join('')}</ul></div>`
+      : rows.length ? '' : '<div class="msg warn">Пусто. Загрузите файл во вкладке «импорт» или добавьте строку.</div>';
     const head = `<thead><tr>${headers.map((h) => `<th class="${numeric.includes(h) ? 'num' : ''}">${esc(h)}${C.SCHEMAS[k].required.includes(h) ? '' : ` <button class="del" data-delcol="${esc(h)}" title="Удалить колонку">×</button>`}</th>`).join('')}<th></th></tr></thead>`;
     const body = rows.map((r, i) => {
       if (q && !headers.some((h) => String(r[h] ?? '').toLowerCase().includes(q))) return '';
       const line = i + 1;
       return `<tr data-i="${i}">${headers.map((h) => {
         const err = map.get(line + ':' + h);
-        return `<td class="${err ? 'bad' : ''}"${err ? ` title="${esc(err)}"` : ''}><input data-col="${esc(h)}" value="${esc(r[h])}" ${numeric.includes(h) ? 'inputmode="decimal" style="text-align:right"' : ''} aria-label="${esc(h)}, строка ${line}"></td>`;
+        return `<td class="${err ? 'bad' : ''}"${err ? ` title="${esc(err)}"` : ''}><input data-col="${esc(h)}" value="${esc(r[h])}" ${numeric.includes(h) ? 'inputmode="decimal" style="text-align:right;font-family:var(--mono)"' : ''} aria-label="${esc(h)}, строка ${line}"></td>`;
       }).join('')}<td><button class="del" data-del="${i}" title="Удалить строку" aria-label="Удалить строку ${line}">✕</button></td></tr>`;
     }).join('');
     $('#editor').innerHTML = head + `<tbody>${body}</tbody>`;
@@ -281,7 +318,7 @@
     const d = e.target.closest('[data-del]');
     if (d) { state[state.tableKind].splice(+d.dataset.del, 1); save(); renderTable(); return; }
     const c = e.target.closest('[data-delcol]');
-    if (c && confirm(`Удалить колонку «${c.dataset.delcol}» вместе с данными?`)) {
+    if (c && confirm(`Удалить колонку ${c.dataset.delcol} вместе со значениями?`)) {
       const k = state.tableKind, col = c.dataset.delcol;
       state.headers[k] = state.headers[k].filter((h) => h !== col);
       state[k].forEach((r) => delete r[col]);
@@ -290,7 +327,7 @@
   });
   renderers.table = renderTable;
 
-  // ================= 3. TTK =================
+  // ================= 03 TTK =================
   const ttkInputs = { minRatio: '#ttk-minratio', mult: '#ttk-mult', cc: '#ttk-cc', cm: '#ttk-cm', aps: '#ttk-aps' };
   function ttkOpts() {
     const t = state.ttk;
@@ -304,11 +341,11 @@
     $('#ttk-own-crit').checked = t.own;
     $('#ttk-override').style.display = t.own ? 'none' : '';
     if (units.length < 2) {
-      $('#ttk-result').innerHTML = '<div class="msg warn">Нужно минимум 2 корректных юнита. Импортируйте <code>units.csv</code>.</div>';
+      $('#ttk-result').innerHTML = '<div class="msg warn">Нужны хотя бы два юнита без ошибок. Загрузите <code>units.csv</code>.</div>';
       $('#ttk-matrix').innerHTML = '';
       return;
     }
-    const opt = (sel) => units.map((u) => `<option value="${esc(u.id)}" ${String(u.id) === String(sel) ? 'selected' : ''}>${esc(u.name)} (id ${esc(u.id)})</option>`).join('');
+    const opt = (sel) => units.map((u) => `<option value="${esc(u.id)}" ${String(u.id) === String(sel) ? 'selected' : ''}>${esc(u.name)}</option>`).join('');
     if (!units.some((u) => String(u.id) === String(t.attacker))) t.attacker = units[0].id;
     if (!units.some((u) => String(u.id) === String(t.target))) t.target = units[1].id;
     $('#ttk-attacker').innerHTML = opt(t.attacker);
@@ -317,27 +354,31 @@
     const o = ttkOpts();
     const r = C.ttk(A, T, o), back = C.ttk(T, A, o);
     const d = r.damage;
-    const winner = r.ttk.expected < back.ttk.expected ? A.name : r.ttk.expected > back.ttk.expected ? T.name : 'ничья';
+    const verdict = r.ttk.expected < back.ttk.expected ? `${esc(A.name)} выигрывает дуэль` : r.ttk.expected > back.ttk.expected ? `${esc(T.name)} выигрывает дуэль` : 'Ничья: убивают друг друга за одно время';
+    const lines = [
+      `\\text{урон} = \\max(${A.attack} - ${T.defense},\\; ${A.attack} \\cdot ${tn(o.minRatio)}) \\cdot ${tn(o.multiplier)} = \\mathbf{${tn(d.base)}}`,
+      `\\text{ожид.} = ${tn(d.base)} \\cdot (1 + ${tn(d.critChance)} \\cdot (${tn(d.critMult)} - 1)) = \\mathbf{${tn(d.expected)}}`,
+      `n = \\left\\lceil \\dfrac{${T.hp}}{${tn(d.expected)}} \\right\\rceil = \\mathbf{${r.hits.expected}}, \\quad \\text{без критов } \\left\\lceil \\dfrac{${T.hp}}{${tn(d.base)}} \\right\\rceil = ${r.hits.worst}`,
+      `TTK = \\dfrac{${r.hits.expected} - 1}{${tn(r.attackSpeed)}} = \\mathbf{${tn(r.ttk.expected, 2)}\\ \\text{с}}`,
+    ];
     $('#ttk-result').innerHTML = `
-      <div class="row"><div class="stat"><b>${fmt(r.ttk.expected)} с</b><span>TTK ожидаемый</span></div>
-      <div class="stat"><b>${fmt(r.ttk.worst)} с</b><span>без критов</span></div>
-      <div class="stat"><b>${fmt(r.ttk.best)} с</b><span>все удары криты</span></div></div>
-      <div class="calc">урон = max(${A.attack} − ${T.defense}, ${A.attack} × ${o.minRatio}) × ${o.multiplier} = <b>${fmt(d.base, 3)}</b>
-крит = ${fmt(d.base, 3)} × ${d.critMult} = ${fmt(d.crit, 3)}
-ожидаемый = ${fmt(d.base, 3)} × (1 + ${d.critChance} × (${d.critMult} − 1)) = <b>${fmt(d.expected, 3)}</b>
-удары = ⌈${T.hp} / ${fmt(d.expected, 3)}⌉ = <b>${r.hits.expected}</b>  (без критов ⌈${T.hp} / ${fmt(d.base, 3)}⌉ = ${r.hits.worst})
-TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.expected)} с</b></div>
-      <p>Ответный TTK (${esc(T.name)} → ${esc(A.name)}): <b>${fmt(back.ttk.expected)} с</b>, ${back.hits.expected} ударов. Победитель дуэли: <b>${esc(winner)}</b>.</p>`;
-    // Матрица: цвет от зелёного (быстро) к красному (долго) по лог-шкале
+      <div class="stats" style="margin-top:0">
+        <div class="stat accent"><b>${fmt(r.ttk.expected)} с</b><span>в среднем</span></div>
+        <div class="stat"><b>${fmt(r.ttk.worst)} с</b><span>без критов</span></div>
+        <div class="stat"><b>${fmt(r.ttk.best)} с</b><span>все удары в крит</span></div>
+      </div>
+      <div class="calc">${lines.map((l) => `<div class="tex">${texHTML(l)}</div>`).join('')}</div>
+      <p class="verdict">В ответ ${esc(T.name)} убивает за <b>${fmt(back.ttk.expected)} с</b> (${back.hits.expected} уд.). ${verdict}.</p>`;
+    // Матрица: насыщенность ячейки по лог-шкале TTK
     const full = units.map((a) => units.map((b) => (a === b ? null : C.ttk(a, b, o))));
     const m = full.map((row) => row.map((x) => x && x.ttk.expected));
     const all = m.flat().filter((x) => x !== null && Number.isFinite(x));
     const lo = Math.log1p(Math.min(...all)), hi = Math.log1p(Math.max(...all));
-    $('#ttk-matrix').innerHTML = `<thead><tr><th>атакует ↓ / цель →</th>${units.map((u) => `<th class="num">${esc(u.name)}</th>`).join('')}</tr></thead><tbody>${
+    $('#ttk-matrix').innerHTML = `<thead><tr><th></th>${units.map((u) => `<th class="num">${esc(u.name)}</th>`).join('')}</tr></thead><tbody>${
       m.map((row, i) => `<tr><th>${esc(units[i].name)}</th>${row.map((x, j) => {
-        if (x === null) return '<td>—</td>';
+        if (x === null) return '<td class="self">·</td>';
         const k = hi > lo ? (Math.log1p(x) - lo) / (hi - lo) : 0;
-        return `<td title="${esc(units[i].name)} → ${esc(units[j].name)}: ${full[i][j].hits.expected} уд." style="background:hsla(${120 - k * 120},65%,45%,.22)">${fmt(x, 1)}</td>`;
+        return `<td title="${esc(units[i].name)} против ${esc(units[j].name)}: ${full[i][j].hits.expected} уд." style="background:rgba(var(--heat),${(k * 0.32).toFixed(3)})">${fmt(x, 1)}</td>`;
       }).join('')}</tr>`).join('')}</tbody>`;
   }
   $('#ttk-attacker').addEventListener('change', (e) => { state.ttk.attacker = e.target.value; save(); renderTTK(); });
@@ -351,23 +392,23 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
   }));
   renderers.ttk = renderTTK;
 
-  // ================= 4. Прогрессия =================
+  // ================= 04 Прогрессия =================
   const prInputs = { base: '#pr-base', power: '#pr-power', linear: '#pr-linear', maxLevel: '#pr-max' };
   function prLevels() { return C.progression(state.progression); }
   function renderProgression() {
     Object.entries(prInputs).forEach(([k, s]) => { $(s).value = state.progression[k]; });
     const lv = prLevels();
-    $('#pr-table').innerHTML = `<thead><tr><th class="num">Уровень</th><th class="num">XP до след.</th><th class="num">XP всего</th><th class="num">Рост, %</th></tr></thead><tbody>${
-      lv.map((l, i) => `<tr><td class="num">${l.level}</td><td class="num">${l.xpToNext.toLocaleString('ru-RU')}</td><td class="num">${l.totalXp.toLocaleString('ru-RU')}</td><td class="num">${i && lv[i - 1].xpToNext && l.xpToNext ? fmt((l.xpToNext / lv[i - 1].xpToNext - 1) * 100, 1) : '—'}</td></tr>`).join('')}</tbody>`;
+    $('#pr-table').innerHTML = `<thead><tr><th class="num">ур.</th><th class="num">до следующего</th><th class="num">набрано к уровню</th><th class="num">прирост</th></tr></thead><tbody>${
+      lv.map((l, i) => `<tr><td class="num">${l.level}</td><td class="num">${l.xpToNext ? l.xpToNext.toLocaleString('ru-RU') : '—'}</td><td class="num">${l.totalXp.toLocaleString('ru-RU')}</td><td class="num">${i && lv[i - 1].xpToNext && l.xpToNext ? '+' + fmt((l.xpToNext / lv[i - 1].xpToNext - 1) * 100, 1) + '%' : ''}</td></tr>`).join('')}</tbody>`;
     chart('pr-chart', {
       data: {
         labels: lv.map((l) => l.level),
         datasets: [
-          { type: 'bar', label: 'XP до следующего уровня', data: lv.map((l) => l.xpToNext), backgroundColor: PALETTE[0] + '99', yAxisID: 'y' },
-          { type: 'line', label: 'XP всего', data: lv.map((l) => l.totalXp), borderColor: PALETTE[1], backgroundColor: PALETTE[1], yAxisID: 'y2', tension: 0.2 },
+          { type: 'bar', label: 'опыт до следующего', data: lv.map((l) => l.xpToNext), backgroundColor: css('--faint'), hoverBackgroundColor: css('--ink'), yAxisID: 'y' },
+          { type: 'line', label: 'всего набрано', data: lv.map((l) => l.totalXp), borderColor: css('--accent'), backgroundColor: css('--accent'), borderWidth: 2, pointRadius: 0, yAxisID: 'y2', tension: 0.25 },
         ],
       },
-      options: { scales: { x: { title: { display: true, text: 'Уровень' } }, y: { beginAtZero: true, title: { display: true, text: 'XP за уровень' } }, y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'XP всего' } } } },
+      options: { scales: { x: { grid: { display: false }, title: { display: true, text: 'уровень' } }, y: { beginAtZero: true }, y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } } } },
     });
   }
   Object.entries(prInputs).forEach(([k, s]) => $(s).addEventListener('input', (e) => {
@@ -385,7 +426,7 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
   $('#pr-export-json').addEventListener('click', () => downloadJSON('progression.json', { params: state.progression, levels: prLevels() }));
   renderers.progression = renderProgression;
 
-  // ================= 5. Лут =================
+  // ================= 05 Лут =================
   let lootSim = null;
   function lootResult() {
     const rows = state.loot.map((r) => Object.assign({}, r, { chance: C.isNumeric(r.chance) ? C.toNumber(r.chance) : r.chance }));
@@ -393,24 +434,26 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
   }
   function renderLoot() {
     if (!state.loot.length) {
-      $('#loot-groups').innerHTML = '<div class="msg warn">Таблица лута пуста — импортируйте <code>loot.csv</code>.</div>';
+      $('#loot-groups').innerHTML = '<div class="msg warn">Таблицы лута пока нет. Загрузите <code>loot.csv</code>.</div>';
       $('#loot-table').innerHTML = '';
       return;
     }
     const { rows, check } = lootResult();
-    $('#loot-groups').innerHTML = `<div class="msg ${check.ok ? 'ok' : 'err'}"><b>${check.ok ? 'Таблица корректна: все группы дают 100%' : 'Есть ошибки в таблице лута'}</b></div><div class="row">${
-      check.groups.map((g) => `<div class="stat"><b>${fmt(g.sum, 4)}%</b><span>группа «${esc(g.group)}», ${g.count} предм. ${g.ok ? '<span class="badge ok">OK</span>' : `<span class="badge err">${g.diff > 0 ? '+' : ''}${fmt(g.diff, 4)}%</span>`}</span></div>`).join('')}</div>`;
+    const bad = check.groups.filter((g) => !g.ok).length;
+    $('#loot-groups').innerHTML = `<div class="stats">${
+      check.groups.map((g) => `<div class="stat ${g.ok ? '' : 'accent'}"><b>${fmt(g.sum, 4)}%</b><span>${esc(g.group)} · ${g.count} шт. · ${g.ok ? '<span class="tag ok">ок</span>' : `<span class="tag err">${g.diff > 0 ? '+' : ''}${fmt(g.diff, 4)}%</span>`}</span></div>`).join('')}
+      <div class="msg ${check.ok ? 'ok' : 'err'}">${check.ok ? 'Все группы сходятся в 100%.' : bad ? `Не сходится ${bad} ${plural(bad, 'группа', 'группы', 'групп')}. Поправьте шансы или нажмите «привести к 100%».` : 'Суммы в порядке, но в отдельных строках есть проблемы, они подсвечены.'}</div></div>`;
     const okGroups = new Set(check.groups.filter((g) => g.ok).map((g) => g.group));
-    $('#loot-table').innerHTML = `<thead><tr><th>id</th><th>Группа</th><th>Предмет</th><th>Редкость</th><th class="num">chance, %</th><th class="num">Сумма группы</th>${lootSim ? '<th class="num">Симуляция, %</th>' : ''}<th>Статус</th></tr></thead><tbody>${
+    $('#loot-table').innerHTML = `<thead><tr><th>id</th><th>группа</th><th>предмет</th><th>редкость</th><th class="num">шанс</th><th class="num">сумма группы</th>${lootSim ? '<th class="num">выпало</th>' : ''}<th>статус</th></tr></thead><tbody>${
       rows.map((r, i) => {
         const g = r.group === undefined || r.group === '' ? '—' : String(r.group);
         const issues = check.rowIssues[i];
         const hard = issues.filter((x) => !x.startsWith('нулевая'));
         const groupBad = !okGroups.has(g);
         const cls = hard.length ? 'bad' : issues.length || groupBad ? 'warn' : '';
-        const status = hard.length || issues.length ? issues.join('; ') : groupBad ? 'сумма группы ≠ 100%' : 'OK';
+        const status = issues.length ? issues.join('; ') : groupBad ? 'группа не даёт 100%' : 'ок';
         const gs = check.groups.find((x) => x.group === g);
-        return `<tr class="${cls}"><td>${esc(r.id)}</td><td>${esc(g)}</td><td>${esc(r.item)}</td><td>${esc(r.rarity)}</td><td class="num">${typeof r.chance === 'number' ? fmt(r.chance, 4) : esc(r.chance)}</td><td class="num">${fmt(gs.sum, 4)}</td>${lootSim ? `<td class="num">${lootSim[i] === undefined ? '—' : fmt(lootSim[i], 2)}</td>` : ''}<td>${esc(status)}</td></tr>`;
+        return `<tr class="${cls}"><td>${esc(r.id)}</td><td>${esc(g)}</td><td>${esc(r.item)}</td><td class="muted">${esc(r.rarity)}</td><td class="num">${typeof r.chance === 'number' ? fmt(r.chance, 4) + '%' : esc(r.chance)}</td><td class="num">${fmt(gs.sum, 4)}%</td>${lootSim ? `<td class="num">${lootSim[i] === undefined ? '—' : fmt(lootSim[i], 2) + '%'}</td>` : ''}<td class="${status === 'ок' ? 'muted' : ''}">${esc(status)}</td></tr>`;
       }).join('')}</tbody>`;
   }
   function lootExportRows() {
@@ -423,8 +466,8 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
   }
   $('#loot-normalize').addEventListener('click', () => {
     const { check } = lootResult();
-    if (check.rowIssues.some((x) => x.includes('chance не число'))) return toast('Сначала исправьте нечисловые chance во вкладке «Таблица»');
-    state.loot = C.normalizeLoot(state.loot); lootSim = null; save(); renderLoot(); toast('Вероятности нормализованы до 100% в каждой группе');
+    if (check.rowIssues.some((x) => x.includes('chance не число'))) return toast('Сначала исправьте шансы, которые не числа (вкладка «таблица»)');
+    state.loot = C.normalizeLoot(state.loot); lootSim = null; save(); renderLoot(); toast('Шансы пересчитаны, каждая группа теперь 100%');
   });
   // Монте-Карло: в каждой группе N бросков, сравниваем наблюдаемую частоту с заявленной.
   $('#loot-simulate').addEventListener('click', () => {
@@ -442,36 +485,36 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
       }
       hits.forEach((h, i) => { lootSim[i] = (h / N) * 100; });
     });
-    renderLoot(); toast(`Симуляция: ${N.toLocaleString('ru-RU')} бросков на группу`);
+    renderLoot(); toast(`Бросил ${N.toLocaleString('ru-RU')} раз в каждой группе`);
   });
   $('#loot-export-csv').addEventListener('click', () => downloadCSV('loot_check.csv', lootExportRows()));
   $('#loot-export-json').addEventListener('click', () => downloadJSON('loot_check.json', { ok: lootResult().check.ok, groups: lootResult().check.groups, rows: lootExportRows() }));
   renderers.loot = renderLoot;
 
-  // ================= 6. Аудит =================
+  // ================= 06 Аудит =================
   function renderAudit() {
     const units = validUnits();
-    if (units.length < 3) { $('#audit-table').innerHTML = '<tr><td><div class="msg warn">Нужно минимум 3 корректных юнита.</div></td></tr>'; return; }
+    if (units.length < 3) { $('#audit-table').innerHTML = '<tr><td><div class="msg warn">Для сравнения нужно хотя бы три юнита.</div></td></tr>'; return; }
     const a = C.audit(units, ttkOpts()).sort((x, y) => y.relative - x.relative);
-    const label = { dominant: 'доминирует', useless: 'бесполезен', ok: 'норма' };
-    $('#audit-table').innerHTML = `<thead><tr><th>Юнит</th><th class="num">Цена</th><th class="num">П/Н/П</th><th class="num">Побед, %</th><th class="num">Сила/цена</th><th class="num">Эффект. к медиане</th><th>Вердикт</th></tr></thead><tbody>${
-      a.map((r) => { const u = units.find((x) => x.id === r.id); return `<tr><td>${esc(r.name)}</td><td class="num">${u.cost}</td><td class="num">${r.wins}/${r.draws}/${r.losses}</td><td class="num">${fmt(r.winRate * 100, 1)}</td><td class="num">${fmt(r.powerPerCost, 1)}</td><td class="num">${fmt(r.relative, 2)}</td><td><span class="badge ${r.verdict === 'ok' ? 'good' : r.verdict}">${label[r.verdict]}</span></td></tr>`; }).join('')}</tbody>`;
-    const col = { dominant: css('--warn'), useless: css('--err'), ok: css('--ok') };
+    const label = { dominant: 'имба', useless: 'слабый', ok: 'норм' };
+    $('#audit-table').innerHTML = `<thead><tr><th>юнит</th><th class="num">цена</th><th class="num">п / н / п</th><th class="num">побед</th><th class="num">сила / цена</th><th class="num">E отн.</th><th></th></tr></thead><tbody>${
+      a.map((r) => { const u = units.find((x) => x.id === r.id); return `<tr><td>${esc(r.name)}</td><td class="num">${u.cost}</td><td class="num">${r.wins} / ${r.draws} / ${r.losses}</td><td class="num">${fmt(r.winRate * 100, 0)}%</td><td class="num">${fmt(r.powerPerCost, 1)}</td><td class="num">${fmt(r.relative, 2)}</td><td><span class="tag ${r.verdict === 'ok' ? 'good' : r.verdict}">${label[r.verdict]}</span></td></tr>`; }).join('')}</tbody>`;
+    const col = { dominant: css('--warn'), useless: css('--err'), ok: css('--faint') };
     chart('audit-chart', {
       type: 'bar',
-      data: { labels: a.map((r) => r.name), datasets: [{ label: 'Эффективность относительно медианы', data: a.map((r) => Math.round(r.relative * 100) / 100), backgroundColor: a.map((r) => col[r.verdict]) }] },
-      options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } },
+      data: { labels: a.map((r) => r.name), datasets: [{ label: 'E отн.', data: a.map((r) => Math.round(r.relative * 100) / 100), backgroundColor: a.map((r) => col[r.verdict]), barThickness: 14 }] },
+      options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true }, y: { grid: { display: false } } } },
     });
   }
   renderers.audit = renderAudit;
 
-  // ================= 7. Экономика =================
+  // ================= 07 Экономика =================
   function renderEcoList(kind) {
     $('#eco-' + kind).innerHTML = state.economy[kind].map((x, i) => `<div class="eco-item" data-kind="${kind}" data-i="${i}">
-      <input type="text" data-f="name" value="${esc(x.name)}" aria-label="Название">
-      <label>за шаг <input type="number" data-f="amount" value="${x.amount}" min="0"></label>
-      <label>рост % <input type="number" data-f="growth" value="${x.growth}" step="0.5"></label>
-      <button class="del" data-eco-del aria-label="Удалить">✕</button></div>`).join('');
+      <label class="field grow">название <input type="text" data-f="name" value="${esc(x.name)}"></label>
+      <label class="field">за шаг <input type="number" data-f="amount" value="${x.amount}" min="0"></label>
+      <label class="field">рост, % <input type="number" data-f="growth" value="${x.growth}" step="0.5"></label>
+      <button class="icon" data-eco-del aria-label="Удалить">✕</button></div>`).join('');
   }
   function renderEconomy() {
     const e = state.economy;
@@ -485,20 +528,23 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
     const last = sim[sim.length - 1];
     const ratio = last.spend ? last.income / last.spend : Infinity;
     const negAt = sim.find((s) => s.balance < 0);
-    $('#eco-summary').innerHTML = `<div class="stat"><b>${fmt(last.balance, 0)}</b><span>баланс на шаге ${e.steps}</span></div>
-      <div class="stat"><b>${fmt(ratio, 2)}</b><span>источники / стоки (последний шаг)</span></div>
-      <div class="stat"><b>${e.start ? fmt(((last.balance - e.start) / Math.abs(e.start)) * 100, 1) + '%' : '—'}</b><span>изменение баланса</span></div>
-      <div class="msg ${ratio > 1.1 ? 'warn' : ratio < 0.9 ? 'err' : 'ok'}">${ratio > 1.1 ? 'Инфляция: валюта копится быстрее, чем тратится — нужны новые стоки.' : ratio < 0.9 ? 'Дефляция: игроку не хватает валюты' + (negAt ? `, баланс уходит в минус на шаге ${negAt.step}` : '') + '.' : 'Экономика близка к равновесию.'}</div>`;
+    const note = ratio > 1.1 ? 'Валюта копится быстрее, чем тратится. Через пару десятков шагов цены в магазине перестанут что-то значить, нужен ещё один сток.'
+      : ratio < 0.9 ? 'Тратить приходится больше, чем игрок получает' + (negAt ? `, на шаге ${negAt.step} баланс уходит в минус` : '') + '.'
+      : 'Доход и расход примерно равны.';
+    $('#eco-summary').innerHTML = `<div class="stat accent"><b>${fmt(last.balance, 0)}</b><span>баланс на шаге ${e.steps}</span></div>
+      <div class="stat"><b>${fmt(ratio, 2)}</b><span>доход / расход на последнем шаге</span></div>
+      <div class="stat"><b>${e.start ? (last.balance >= e.start ? '+' : '') + fmt(((last.balance - e.start) / Math.abs(e.start)) * 100, 0) + '%' : '—'}</b><span>к стартовому балансу</span></div>
+      <div class="msg ${ratio > 1.1 ? 'warn' : ratio < 0.9 ? 'err' : 'ok'}">${note}</div>`;
     chart('eco-chart', {
       data: {
         labels: sim.map((s) => s.step),
         datasets: [
-          { type: 'line', label: 'Баланс', data: sim.map((s) => s.balance), borderColor: PALETTE[0], backgroundColor: PALETTE[0], yAxisID: 'y', tension: 0.2 },
-          { type: 'line', label: 'Доход за шаг', data: sim.map((s) => s.income), borderColor: PALETTE[2], backgroundColor: PALETTE[2], yAxisID: 'y2', borderDash: [4, 3] },
-          { type: 'line', label: 'Расход за шаг', data: sim.map((s) => s.spend), borderColor: PALETTE[3], backgroundColor: PALETTE[3], yAxisID: 'y2', borderDash: [4, 3] },
+          { type: 'line', label: 'баланс', data: sim.map((s) => s.balance), borderColor: css('--accent'), backgroundColor: css('--accent'), borderWidth: 2, pointRadius: 0, yAxisID: 'y', tension: 0.2 },
+          { type: 'line', label: 'доход за шаг', data: sim.map((s) => (s.step ? s.income : null)), borderColor: css('--ink'), backgroundColor: css('--ink'), borderWidth: 1, pointRadius: 0, yAxisID: 'y2' },
+          { type: 'line', label: 'расход за шаг', data: sim.map((s) => (s.step ? s.spend : null)), borderColor: css('--muted'), backgroundColor: css('--muted'), borderWidth: 1, pointRadius: 0, yAxisID: 'y2', borderDash: [4, 3] },
         ],
       },
-      options: { scales: { x: { title: { display: true, text: 'Шаг' } }, y: { title: { display: true, text: 'Баланс' } }, y2: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'За шаг' } } } },
+      options: { scales: { x: { grid: { display: false }, title: { display: true, text: 'шаг' } }, y: {}, y2: { position: 'right', grid: { drawOnChartArea: false } } } },
     });
   }
   $('#eco-start').addEventListener('input', (e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) { state.economy.start = v; save(); renderEcoChart(); } });
@@ -519,34 +565,34 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
   });
   renderers.economy = renderEconomy;
 
-  // ================= 8. Навыки =================
+  // ================= 08 Навыки =================
   function renderSkills() {
     const ta = $('#skills-json');
     if (document.activeElement !== ta) ta.value = state.skills ? JSON.stringify(state.skills, null, 2) : '';
     const svg = $('#skills-svg');
-    if (!state.skills) { svg.innerHTML = ''; $('#skills-errors').innerHTML = '<div class="msg warn">Нет дерева — импортируйте <code>skills.json</code> или вставьте JSON выше.</div>'; return; }
+    if (!state.skills) { svg.innerHTML = ''; $('#skills-errors').innerHTML = '<div class="msg warn">Дерева пока нет. Загрузите <code>skills.json</code> или вставьте JSON выше.</div>'; return; }
     let t;
     try { t = C.layoutSkillTree(state.skills); } catch (e) { $('#skills-errors').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; return; }
-    $('#skills-errors').innerHTML = t.errors.length ? `<div class="msg err"><b>Ошибки дерева</b><ul>${t.errors.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
-    const W = 150, H = 44, GX = 70, GY = 18, P = 16;
+    $('#skills-errors').innerHTML = t.errors.length ? `<div class="msg err"><b>С деревом что-то не так</b><ul>${t.errors.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
+    const W = 156, H = 46, GX = 72, GY = 16;
     const pos = new Map();
-    t.layers.forEach((layer, d) => (layer || []).forEach((n, i) => pos.set(String(n.id), { x: P + d * (W + GX), y: P + i * (H + GY) })));
-    const width = P * 2 + t.layers.length * (W + GX) - GX;
-    const height = P * 2 + Math.max(...t.layers.map((l) => (l || []).length)) * (H + GY) - GY;
-    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    t.layers.forEach((layer, d) => (layer || []).forEach((n, i) => pos.set(String(n.id), { x: d * (W + GX), y: i * (H + GY) })));
+    const width = t.layers.length * (W + GX) - GX + 2;
+    const height = Math.max(...t.layers.map((l) => (l || []).length)) * (H + GY) - GY + 2;
+    svg.setAttribute('viewBox', `-1 -1 ${width} ${height}`);
     svg.setAttribute('width', width); svg.setAttribute('height', height);
     let edges = '', nodes = '';
     t.byId.forEach((n, id) => {
       const b = pos.get(id);
       (n.requires || []).map(String).filter((r) => pos.has(r)).forEach((r) => {
-        const a = pos.get(r), x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2, mx = (x1 + x2) / 2;
-        edges += `<path data-from="${esc(r)}" data-to="${esc(id)}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#arr)"/>`;
+        const a = pos.get(r), x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2, mx = x1 + (x2 - x1) / 2;
+        edges += `<path class="edge" data-from="${esc(r)}" data-to="${esc(id)}" d="M${x1},${y1} H${mx - 8} Q${mx},${y1} ${mx},${y1 + Math.sign(y2 - y1) * Math.min(8, Math.abs(y2 - y1) / 2)} V${y2 - Math.sign(y2 - y1) * Math.min(8, Math.abs(y2 - y1) / 2)} Q${mx},${y2} ${mx + 8},${y2} H${x2}"/>`;
       });
       nodes += `<g class="node ${(n.requires || []).length ? '' : 'root'}" data-id="${esc(id)}" transform="translate(${b.x},${b.y})" tabindex="0">
-        <rect width="${W}" height="${H}" rx="8"/><text x="10" y="18" font-weight="600">${esc(n.name || id)}</text>
-        <text x="10" y="34" class="muted">${esc(id)}${n.cost !== undefined ? ' · стоимость ' + esc(n.cost) : ''}</text><title>${esc(n.name || id)}: требует ${esc((n.requires || []).join(', ') || '—')}</title></g>`;
+        <rect width="${W}" height="${H}"/><text x="12" y="20">${esc(n.name || id)}</text>
+        <text x="12" y="36" class="meta">${esc(id)}${n.cost !== undefined ? ' · ' + esc(n.cost) + ' оч.' : ''}</text><title>${esc(n.name || id)}. Требует: ${esc((n.requires || []).join(', ') || 'ничего')}</title></g>`;
     });
-    svg.innerHTML = `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted);stroke:none"/></marker></defs>${edges}${nodes}`;
+    svg.innerHTML = edges + nodes;
     // Подсветка всей цепочки требований (и суммарной стоимости) при наведении
     const highlight = (id) => {
       $$('.hl', svg).forEach((x) => x.classList.remove('hl'));
@@ -556,17 +602,17 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
       need.forEach((n) => $(`.node[data-id="${CSS.escape(n)}"]`, svg).classList.add('hl'));
       $$('path[data-to]', svg).forEach((p) => { if (need.has(p.dataset.to) && need.has(p.dataset.from)) p.classList.add('hl'); });
       const cost = [...need].reduce((s, n) => s + (Number(t.byId.get(n).cost) || 0), 0);
-      toast(`«${t.byId.get(id).name || id}»: нужно навыков ${need.size}, суммарно очков ${cost}`);
+      toast(`${t.byId.get(id).name || id}: ${need.size} ${plural(need.size, 'навык', 'навыка', 'навыков')} в цепочке, ${cost} оч.`);
     };
     $$('.node', svg).forEach((g) => { g.addEventListener('mouseenter', () => highlight(g.dataset.id)); g.addEventListener('focus', () => highlight(g.dataset.id)); g.addEventListener('mouseleave', () => highlight(null)); });
   }
   $('#skills-apply').addEventListener('click', () => {
     try { const p = JSON.parse($('#skills-json').value); C.layoutSkillTree(p); state.skills = Array.isArray(p) ? { nodes: p } : p; save(); $('#skills-json').blur(); renderSkills(); toast('Дерево обновлено'); }
-    catch (e) { $('#skills-errors').innerHTML = `<div class="msg err">JSON: ${esc(e.message)}</div>`; }
+    catch (e) { $('#skills-errors').innerHTML = `<div class="msg err">JSON не разобрался: ${esc(e.message)}</div>`; }
   });
   renderers.skills = renderSkills;
 
-  // ================= 9. Ассистент =================
+  // ================= 09 Ассистент =================
   try { const k = localStorage.getItem('bps.deepseekKey'); if (k) { $('#ai-key').value = k; $('#ai-remember').checked = true; } } catch (e) { /* без хранилища ключ просто не запоминается */ }
   function aiPayload() {
     const units = validUnits();
@@ -587,9 +633,9 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
   $('#ai-remember').addEventListener('change', (e) => { try { if (e.target.checked) localStorage.setItem('bps.deepseekKey', $('#ai-key').value.trim()); else localStorage.removeItem('bps.deepseekKey'); } catch (er) { /* нет хранилища */ } });
   $('#ai-send').addEventListener('click', async () => {
     const key = $('#ai-key').value.trim();
-    if (!key) return toast('Введите API-ключ DeepSeek');
+    if (!key) return toast('Нужен ключ DeepSeek');
     if ($('#ai-remember').checked) try { localStorage.setItem('bps.deepseekKey', key); } catch (e) { /* нет хранилища */ }
-    const btn = $('#ai-send'); btn.disabled = true; $('#ai-status').textContent = 'Жду ответ…'; $('#ai-answer').textContent = '';
+    const btn = $('#ai-send'); btn.disabled = true; $('#ai-status').textContent = 'думает…'; $('#ai-answer').textContent = '';
     try {
       const r = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
@@ -597,18 +643,18 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
         body: JSON.stringify({
           model: 'deepseek-chat', temperature: 0.3,
           messages: [
-            { role: 'system', content: 'Ты опытный геймдизайнер-балансер. Объясняй по-русски, кратко, со ссылками на конкретные числа. Не придумывай данные, которых нет. Предлагай правки как рекомендации — не меняй данные сам.' },
-            { role: 'user', content: $('#ai-question').value + '\n\nАгрегированные данные баланса (JSON):\n' + JSON.stringify(aiPayload()) },
+            { role: 'system', content: 'Ты геймдизайнер, который занимается балансом. Отвечай по-русски, коротко и по делу, опирайся на конкретные числа из данных. Ничего не выдумывай. Правки предлагай как советы.' },
+            { role: 'user', content: $('#ai-question').value + '\n\nДанные баланса (JSON):\n' + JSON.stringify(aiPayload()) },
           ],
         }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error((j.error && j.error.message) || 'HTTP ' + r.status);
-      $('#ai-answer').textContent = j.choices?.[0]?.message?.content || '(пустой ответ)';
-      $('#ai-status').textContent = 'Готово';
+      $('#ai-answer').textContent = j.choices?.[0]?.message?.content || '(ответ пустой)';
+      $('#ai-status').textContent = '';
     } catch (e) {
       $('#ai-status').textContent = '';
-      $('#ai-answer').innerHTML = `<div class="msg err">Ошибка запроса: ${esc(e.message)}</div>`;
+      $('#ai-answer').innerHTML = `<div class="msg err">Запрос не прошёл: ${esc(e.message)}</div>`;
     } finally { btn.disabled = false; }
   });
   renderers.assistant = renderAssistant;
@@ -652,4 +698,6 @@ TTK = (${r.hits.expected} − 1) / ${fmt(r.attackSpeed, 3)} = <b>${fmt(r.ttk.exp
     save();
   }
   bootstrap().then(() => showTab(state.tab));
+  // Шрифты меняют высоту пунктов меню — переставить метку после загрузки.
+  document.fonts && document.fonts.ready.then(moveInk);
 })();

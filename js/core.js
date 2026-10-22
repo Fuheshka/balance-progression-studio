@@ -91,8 +91,8 @@
     const errors = [], warnings = [];
     headers = headers || collectHeaders(rawRows);
     const missing = schema.required.filter((c) => !headers.includes(c));
-    if (missing.length) errors.push({ line: 1, msg: 'Нет обязательных колонок: ' + missing.join(', ') });
-    if (!rawRows.length) errors.push({ line: 1, msg: 'Файл не содержит строк данных' });
+    if (missing.length) errors.push({ line: 1, msg: 'В файле не хватает колонок: ' + missing.join(', ') });
+    if (!rawRows.length) errors.push({ line: 1, msg: 'В файле есть заголовок, но нет ни одной строки' });
     if (missing.length) return { ok: false, errors, warnings, rows: [] };
 
     const seen = new Map();
@@ -100,22 +100,22 @@
       const line = r.__line || i + 1;
       const out = {};
       Object.keys(r).forEach((k) => { if (!k.startsWith('__')) out[k] = r[k]; });
-      if (r.__extra) warnings.push({ line, msg: `Лишние значения в строке (${r.__extra}), отброшены` });
+      if (r.__extra) warnings.push({ line, msg: `значений больше, чем колонок, лишние (${r.__extra}) отброшены` });
       schema.required.forEach((c) => {
-        if (out[c] === '' || out[c] === undefined || out[c] === null) errors.push({ line, col: c, msg: `Пустое обязательное поле «${c}»` });
+        if (out[c] === '' || out[c] === undefined || out[c] === null) errors.push({ line, col: c, msg: 'пусто, а поле обязательное' });
       });
       schema.numeric.forEach((c) => {
         if (!(c in out) || out[c] === '' || out[c] === null) return;
-        if (!isNumeric(out[c])) errors.push({ line, col: c, msg: `«${c}» должно быть числом, получено «${out[c]}»` });
+        if (!isNumeric(out[c])) errors.push({ line, col: c, msg: `ждали число, а тут «${out[c]}»` });
         else {
           out[c] = toNumber(out[c]);
-          if (out[c] < 0) errors.push({ line, col: c, msg: `«${c}» не может быть отрицательным` });
-          if (schema.positive.includes(c) && out[c] === 0) errors.push({ line, col: c, msg: `«${c}» должно быть больше 0` });
+          if (out[c] < 0) errors.push({ line, col: c, msg: 'меньше нуля' });
+          if (schema.positive.includes(c) && out[c] === 0) errors.push({ line, col: c, msg: 'должно быть больше нуля' });
         }
       });
       const id = String(out.id ?? '').trim();
       if (id !== '') {
-        if (seen.has(id)) errors.push({ line, col: 'id', msg: `Дубль ID «${id}» (первый раз в строке ${seen.get(id)})` });
+        if (seen.has(id)) errors.push({ line, col: 'id', msg: `id ${id} уже был в строке ${seen.get(id)}` });
         else seen.set(id, line);
       }
       if (isNumeric(out.id)) out.id = toNumber(out.id);

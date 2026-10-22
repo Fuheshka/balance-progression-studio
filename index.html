@@ -3,238 +3,264 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Balance & Progression Studio</title>
-  <meta name="description" content="Веб-сервис для проверки баланса игры: импорт статов, TTK, кривые прогрессии, лут, экспорт.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
+  <title>Balance Studio</title>
+  <meta name="description" content="Проверка баланса игры: статы юнитов, TTK, кривая опыта, таблицы лута.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230f0e12'/><rect x='6' y='15' width='20' height='2' fill='%23f0a000'/><rect x='15' y='6' width='2' height='20' fill='%23f6f8f7'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@300;400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <link rel="stylesheet" href="css/style.css">
   <script>try { const t = localStorage.getItem('bps.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
 <header class="top">
-  <div class="brand">⚖️ <b>Balance &amp; Progression Studio</b></div>
-  <nav class="tabs" role="tablist">
-    <button data-tab="import" role="tab">1 Импорт</button>
-    <button data-tab="table" role="tab">2 Таблица</button>
-    <button data-tab="ttk" role="tab">3 Урон / TTK</button>
-    <button data-tab="progression" role="tab">4 Прогрессия</button>
-    <button data-tab="loot" role="tab">5 Лут</button>
-    <button data-tab="audit" role="tab">6 Аудит</button>
-    <button data-tab="economy" role="tab">7 Экономика</button>
-    <button data-tab="skills" role="tab">8 Навыки</button>
-    <button data-tab="assistant" role="tab">9 Ассистент</button>
-  </nav>
+  <a class="wordmark" href="#" aria-label="Balance Studio">balance<span>/</span>studio</a>
   <div class="top-actions">
-    <button id="btn-export-project" title="Ctrl/⌘+E">Экспорт проекта</button>
-    <button id="btn-theme" title="Alt+T" aria-label="Переключить тему">🌓</button>
-    <button id="btn-help" title="?" aria-label="Горячие клавиши">?</button>
+    <button id="btn-export-project" class="ghost" title="Ctrl/⌘+E">сохранить проект</button>
+    <button id="btn-theme" class="ghost icon" title="Alt+T" aria-label="Сменить тему"><svg viewBox="0 0 20 20" width="18" height="18"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button>
+    <button id="btn-help" class="ghost icon" title="Горячие клавиши" aria-label="Горячие клавиши">?</button>
   </div>
 </header>
 
+<div class="layout">
+  <nav class="tabs" role="tablist" aria-label="Разделы">
+    <button data-tab="import" role="tab"><i>01</i>импорт</button>
+    <button data-tab="table" role="tab"><i>02</i>таблица</button>
+    <button data-tab="ttk" role="tab"><i>03</i>урон и TTK</button>
+    <button data-tab="progression" role="tab"><i>04</i>прогрессия</button>
+    <button data-tab="loot" role="tab"><i>05</i>лут</button>
+    <span class="tabs-sep">дополнительно</span>
+    <button data-tab="audit" role="tab"><i>06</i>аудит</button>
+    <button data-tab="economy" role="tab"><i>07</i>экономика</button>
+    <button data-tab="skills" role="tab"><i>08</i>навыки</button>
+    <button data-tab="assistant" role="tab"><i>09</i>ассистент</button>
+    <span class="tabs-ink" aria-hidden="true"></span>
+  </nav>
+
 <main>
-  <!-- 1. Импорт -->
+  <!-- 01 Импорт -->
   <section id="tab-import" class="tab">
-    <h2>Импорт данных</h2>
-    <p class="muted">CSV (разделитель <code>,</code> <code>;</code> или Tab) и JSON. Юниты: <code>id,name,hp,attack,defense,cost</code> (+ необязательные <code>crit_chance,crit_mult,attack_speed</code>). Лут: <code>id,item,chance</code> (+ <code>group,rarity</code>). Навыки: JSON <code>{"nodes":[...]}</code>. Файл проекта (кнопка «Экспорт проекта») восстанавливает всё.</p>
+    <header class="head"><span class="num">01</span><h2>Импорт</h2></header>
+    <p class="lead">Загрузите CSV или JSON. Если в файле есть ошибки, он не загрузится, а ниже появится список: какая строка и что с ней не так.</p>
+    <dl class="spec">
+      <dt>юниты</dt><dd><code>id, name, hp, attack, defense, cost</code><span class="muted">, по желанию <code>crit_chance, crit_mult, attack_speed</code></span></dd>
+      <dt>лут</dt><dd><code>id, item, chance</code><span class="muted">, по желанию <code>group, rarity</code></span></dd>
+      <dt>навыки</dt><dd><code>{"nodes": [...]}</code> в JSON</dd>
+      <dt>проект</dt><dd>файл из кнопки «сохранить проект», восстанавливает всё сразу</dd>
+    </dl>
     <div class="row">
-      <label>Тип данных
+      <label class="field">тип
         <select id="import-type">
-          <option value="auto">Определить автоматически</option>
-          <option value="units">Юниты / предметы</option>
-          <option value="loot">Таблица лута</option>
-          <option value="skills">Дерево навыков (JSON)</option>
-          <option value="project">Проект целиком (JSON)</option>
+          <option value="auto">определить сам</option>
+          <option value="units">юниты</option>
+          <option value="loot">лут</option>
+          <option value="skills">навыки</option>
+          <option value="project">проект</option>
         </select>
       </label>
-      <label>Режим
+      <label class="field">если данные уже есть
         <select id="import-mode">
-          <option value="replace">Заменить данные</option>
-          <option value="append">Добавить к существующим</option>
+          <option value="replace">заменить</option>
+          <option value="append">дописать</option>
         </select>
       </label>
     </div>
     <label id="dropzone" class="dropzone" tabindex="0">
       <input type="file" id="file-input" accept=".csv,.json,.txt,.tsv" multiple hidden>
-      <span>Перетащите файлы сюда или <u>выберите</u></span>
+      <span class="dz-mark">+</span>
+      <span>перетащите файл или <u>выберите на диске</u></span>
+      <span class="muted small">csv · tsv · json, до 5 мб</span>
     </label>
-    <div class="row">
-      <span class="muted">Примеры:</span>
+    <div class="samples">
+      <span class="label">примеры</span>
       <button data-sample="units.csv">units.csv</button>
       <button data-sample="loot.csv">loot.csv</button>
       <button data-sample="skills.json">skills.json</button>
-      <button data-sample="units_broken.csv">units_broken.csv (с ошибками)</button>
-      <button data-sample="loot_broken.csv">loot_broken.csv (с ошибками)</button>
+      <button data-sample="units_broken.csv" class="warn-btn">units_broken.csv</button>
+      <button data-sample="loot_broken.csv" class="warn-btn">loot_broken.csv</button>
     </div>
     <div id="import-report"></div>
   </section>
 
-  <!-- 2. Таблица -->
+  <!-- 02 Таблица -->
   <section id="tab-table" class="tab">
-    <h2>Редактор таблицы</h2>
-    <div class="row">
+    <header class="head"><span class="num">02</span><h2>Таблица</h2></header>
+    <div class="toolbar">
       <div class="seg" id="table-kind">
-        <button data-kind="units" class="on">Юниты</button>
-        <button data-kind="loot">Лут</button>
+        <button data-kind="units" class="on">юниты</button>
+        <button data-kind="loot">лут</button>
       </div>
-      <button id="btn-add-row">+ Строка</button>
-      <button id="btn-add-col">+ Колонка</button>
-      <input id="table-filter" type="search" placeholder="Фильтр…">
+      <button id="btn-add-row">+ строка</button>
+      <button id="btn-add-col">+ колонка</button>
+      <input id="table-filter" type="search" placeholder="поиск">
       <span class="spacer"></span>
-      <button id="btn-export-csv">Экспорт CSV</button>
-      <button id="btn-export-json">Экспорт JSON</button>
-      <button id="btn-clear" class="danger">Очистить</button>
+      <button id="btn-export-csv">csv</button>
+      <button id="btn-export-json">json</button>
+      <button id="btn-clear" class="danger">очистить</button>
     </div>
-    <p class="muted" id="save-status">Изменения сохраняются автоматически в localStorage.</p>
+    <p class="muted small" id="save-status">Правки сохраняются в браузере сами.</p>
     <div id="table-errors"></div>
     <div class="table-wrap"><table id="editor" class="grid"></table></div>
   </section>
 
-  <!-- 3. TTK -->
+  <!-- 03 TTK -->
   <section id="tab-ttk" class="tab">
-    <h2>Калькулятор урона и TTK</h2>
-    <div class="formula">
-      урон = max(<i>attack</i> − <i>defense</i>, <i>attack</i> × <i>minRatio</i>) × <i>множитель</i>;
-      ожидаемый = урон × (1 + <i>critChance</i> × (<i>critMult</i> − 1));
-      удары = ⌈<i>hp</i> / урон⌉; TTK = (удары − 1) / <i>attackSpeed</i>
+    <header class="head"><span class="num">03</span><h2>Урон и TTK</h2></header>
+    <div class="formula-block">
+      <div class="tex" data-tex="\text{урон} = \max(A - D,\; A \cdot r_{\min}) \cdot m">урон = max(A − D, A·r) · m</div>
+      <div class="tex" data-tex="\text{ожид.} = \text{урон} \cdot \bigl(1 + p_{\text{крит}} \cdot (k_{\text{крит}} - 1)\bigr)">ожид. = урон · (1 + p·(k − 1))</div>
+      <div class="tex" data-tex="n = \left\lceil \dfrac{HP}{\text{урон}} \right\rceil,\qquad TTK = \dfrac{n - 1}{v}">n = ⌈HP / урон⌉, TTK = (n − 1) / v</div>
+      <p class="muted small">A — атака, D — защита цели, r<sub>min</sub> — минимальная доля урона, m — множитель, v — ударов в секунду. Первый удар идёт сразу, поэтому TTK = 0 значит «убил с одного удара».</p>
     </div>
     <div class="grid2">
-      <div class="card">
+      <div class="panel">
         <div class="row">
-          <label>Атакующий <select id="ttk-attacker"></select></label>
-          <label>Цель <select id="ttk-target"></select></label>
-          <button id="ttk-swap" title="Поменять местами">⇄</button>
+          <label class="field">кто бьёт <select id="ttk-attacker"></select></label>
+          <button id="ttk-swap" class="icon" title="Поменять местами" aria-label="Поменять местами">⇄</button>
+          <label class="field">по кому <select id="ttk-target"></select></label>
         </div>
         <div class="row">
-          <label>minRatio <input id="ttk-minratio" type="number" step="0.05" min="0" max="1" value="0.1"></label>
-          <label>Множитель <input id="ttk-mult" type="number" step="0.1" min="0" value="1"></label>
+          <label class="field"><span>r<sub>min</sub></span> <input id="ttk-minratio" type="number" step="0.05" min="0" max="1" value="0.1"></label>
+          <label class="field">m <input id="ttk-mult" type="number" step="0.1" min="0" value="1"></label>
         </div>
-        <div class="row">
-          <label><input id="ttk-own-crit" type="checkbox" checked> Криты и скорость из таблицы</label>
-        </div>
+        <label class="check"><input id="ttk-own-crit" type="checkbox" checked> брать криты и скорость из таблицы</label>
         <div class="row" id="ttk-override">
-          <label>critChance <input id="ttk-cc" type="number" step="0.05" min="0" max="1" value="0"></label>
-          <label>critMult <input id="ttk-cm" type="number" step="0.1" min="1" value="1.5"></label>
-          <label>attackSpeed <input id="ttk-aps" type="number" step="0.1" min="0.1" value="1"></label>
+          <label class="field"><span>p<sub>крит</sub></span> <input id="ttk-cc" type="number" step="0.05" min="0" max="1" value="0"></label>
+          <label class="field"><span>k<sub>крит</sub></span> <input id="ttk-cm" type="number" step="0.1" min="1" value="1.5"></label>
+          <label class="field">v <input id="ttk-aps" type="number" step="0.1" min="0.1" value="1"></label>
         </div>
       </div>
-      <div class="card" id="ttk-result"></div>
+      <div class="panel" id="ttk-result"></div>
     </div>
-    <h3>Матрица ожидаемого TTK (строка атакует столбец), секунды</h3>
-    <p class="muted">0 — цель погибает с первого удара. Наведите на ячейку, чтобы увидеть число ударов.</p>
+    <h3>Все против всех</h3>
+    <p class="muted small">Ожидаемый TTK в секундах, строка бьёт столбец. Чем темнее ячейка, тем дольше бой. Наведите на ячейку, чтобы увидеть число ударов.</p>
     <div class="table-wrap"><table id="ttk-matrix" class="grid heat"></table></div>
   </section>
 
-  <!-- 4. Прогрессия -->
+  <!-- 04 Прогрессия -->
   <section id="tab-progression" class="tab">
-    <h2>Кривая прогрессии</h2>
-    <div class="formula">XP до следующего уровня = round(<i>base</i> × L<sup><i>power</i></sup> + <i>linear</i> × (L − 1))</div>
-    <div class="row">
-      <label>base <input id="pr-base" type="number" min="1" value="100"></label>
-      <label>power <input id="pr-power" type="number" step="0.05" min="0" value="1.5"></label>
-      <label>linear <input id="pr-linear" type="number" min="0" value="0"></label>
-      <label>Макс. уровень <input id="pr-max" type="number" min="2" max="200" value="20"></label>
-      <label>Пресет
+    <header class="head"><span class="num">04</span><h2>Прогрессия</h2></header>
+    <div class="formula-block">
+      <div class="tex" data-tex="XP(L) = \operatorname{round}\bigl(b \cdot L^{\,p} + c \cdot (L - 1)\bigr)">XP(L) = round(b · L^p + c · (L − 1))</div>
+      <p class="muted small">Сколько опыта нужно, чтобы перейти с уровня L на следующий.</p>
+    </div>
+    <div class="toolbar">
+      <label class="field">b <input id="pr-base" type="number" min="1" value="100"></label>
+      <label class="field">p <input id="pr-power" type="number" step="0.05" min="0" value="1.5"></label>
+      <label class="field">c <input id="pr-linear" type="number" min="0" value="0"></label>
+      <label class="field">уровней <input id="pr-max" type="number" min="2" max="200" value="20"></label>
+      <label class="field">заготовка
         <select id="pr-preset">
-          <option value="">—</option>
-          <option value="100,1,0">Линейная</option>
-          <option value="100,1.5,0">Умеренная (1.5)</option>
-          <option value="100,2,0">Квадратичная</option>
-          <option value="50,2.2,25">Жёсткая (MMO)</option>
+          <option value="">своя</option>
+          <option value="100,1,0">линейная</option>
+          <option value="100,1.5,0">умеренная</option>
+          <option value="100,2,0">квадратичная</option>
+          <option value="50,2.2,25">как в mmo</option>
         </select>
       </label>
       <span class="spacer"></span>
-      <button id="pr-export-csv">CSV</button>
-      <button id="pr-export-json">JSON</button>
+      <button id="pr-export-csv">csv</button>
+      <button id="pr-export-json">json</button>
     </div>
     <div class="grid2">
-      <div class="card chart-box"><canvas id="pr-chart"></canvas></div>
+      <div class="panel chart-box"><canvas id="pr-chart"></canvas></div>
       <div class="table-wrap short"><table id="pr-table" class="grid"></table></div>
     </div>
   </section>
 
-  <!-- 5. Лут -->
+  <!-- 05 Лут -->
   <section id="tab-loot" class="tab">
-    <h2>Проверка таблицы лута</h2>
-    <p class="muted">Сумма <code>chance</code> внутри каждой группы (<code>group</code>) должна быть ровно 100%. Редактировать строки можно во вкладке «Таблица → Лут».</p>
-    <div class="row">
-      <button id="loot-normalize">Нормализовать до 100%</button>
-      <label>Бросков симуляции <input id="loot-rolls" type="number" min="100" step="1000" value="10000"></label>
-      <button id="loot-simulate">Симулировать</button>
+    <header class="head"><span class="num">05</span><h2>Лут</h2></header>
+    <p class="lead">В каждой группе (колонка <code>group</code>) шансы должны давать ровно 100%. Сами строки правятся во вкладке «таблица».</p>
+    <div class="toolbar">
+      <button id="loot-normalize">привести к 100%</button>
+      <label class="field">бросков <input id="loot-rolls" type="number" min="100" step="1000" value="10000"></label>
+      <button id="loot-simulate">прогнать симуляцию</button>
       <span class="spacer"></span>
-      <button id="loot-export-csv">Экспорт результата CSV</button>
-      <button id="loot-export-json">JSON</button>
+      <button id="loot-export-csv">csv</button>
+      <button id="loot-export-json">json</button>
     </div>
     <div id="loot-groups"></div>
     <div class="table-wrap"><table id="loot-table" class="grid"></table></div>
   </section>
 
-  <!-- 6. Аудит -->
+  <!-- 06 Аудит -->
   <section id="tab-audit" class="tab">
-    <h2>Аудит баланса</h2>
-    <p class="muted">Каждый юнит дерётся с каждым (по ожидаемому TTK). Эффективность = доля побед ÷ (цена ÷ медианная цена). Относительно медианы: ≥ 1.3 — <span class="badge dominant">доминирует</span>, ≤ 0.7 — <span class="badge useless">бесполезен</span>. Сила/цена = hp × средний DPS ÷ cost.</p>
+    <header class="head"><span class="num">06</span><h2>Аудит</h2></header>
+    <div class="formula-block">
+      <div class="tex" data-tex="E = \dfrac{\text{доля побед}}{\text{цена} \,/\, \text{медиана цен}},\qquad E_{\text{отн}} = \dfrac{E}{\operatorname{median}(E)}">E = доля побед / (цена / медиана цен)</div>
+      <p class="muted small">Каждый юнит дерётся с каждым один на один, выигрывает тот, кто убьёт быстрее. Если E<sub>отн</sub> ≥ 1.3, юнит слишком хорош за свои деньги. Если ≤ 0.7, его никто не купит.</p>
+    </div>
     <div class="grid2">
       <div class="table-wrap"><table id="audit-table" class="grid"></table></div>
-      <div class="card chart-box"><canvas id="audit-chart"></canvas></div>
+      <div class="panel chart-box"><canvas id="audit-chart"></canvas></div>
     </div>
   </section>
 
-  <!-- 7. Экономика -->
+  <!-- 07 Экономика -->
   <section id="tab-economy" class="tab">
-    <h2>Симулятор инфляции</h2>
-    <div class="formula">баланс<sub>t</sub> = баланс<sub>t−1</sub> + Σ источник × (1 + рост)<sup>t−1</sup> − Σ сток × (1 + рост)<sup>t−1</sup></div>
-    <div class="row">
-      <label>Стартовый баланс <input id="eco-start" type="number" value="1000"></label>
-      <label>Шагов <input id="eco-steps" type="number" min="1" max="1000" value="30"></label>
+    <header class="head"><span class="num">07</span><h2>Экономика</h2></header>
+    <div class="formula-block">
+      <div class="tex" data-tex="B_t = B_{t-1} + \sum_i s_i (1+g_i)^{t-1} - \sum_j d_j (1+g_j)^{t-1}">B_t = B_{t−1} + Σ s·(1+g)^{t−1} − Σ d·(1+g)^{t−1}</div>
+      <p class="muted small">s — источник валюты за шаг, d — сток, g — рост за шаг.</p>
+    </div>
+    <div class="toolbar">
+      <label class="field">на старте <input id="eco-start" type="number" value="1000"></label>
+      <label class="field">шагов <input id="eco-steps" type="number" min="1" max="1000" value="30"></label>
     </div>
     <div class="grid2">
-      <div class="card"><h3>Источники</h3><div id="eco-sources"></div><button data-eco-add="sources">+ Источник</button></div>
-      <div class="card"><h3>Стоки</h3><div id="eco-sinks"></div><button data-eco-add="sinks">+ Сток</button></div>
+      <div class="panel"><h3>Откуда приходит</h3><div id="eco-sources"></div><button data-eco-add="sources">+ источник</button></div>
+      <div class="panel"><h3>Куда уходит</h3><div id="eco-sinks"></div><button data-eco-add="sinks">+ сток</button></div>
     </div>
-    <div id="eco-summary" class="row"></div>
-    <div class="card chart-box wide"><canvas id="eco-chart"></canvas></div>
+    <div id="eco-summary" class="stats"></div>
+    <div class="panel chart-box wide"><canvas id="eco-chart"></canvas></div>
   </section>
 
-  <!-- 8. Навыки -->
+  <!-- 08 Навыки -->
   <section id="tab-skills" class="tab">
-    <h2>Дерево навыков</h2>
-    <p class="muted">Формат: <code>{"nodes":[{"id":"a","name":"…","cost":1,"requires":["b"]}]}</code>. Уровень узла = длина самой длинной цепочки требований.</p>
-    <details><summary>Редактировать JSON</summary>
+    <header class="head"><span class="num">08</span><h2>Дерево навыков</h2></header>
+    <p class="lead">Колонка = сколько шагов до навыка от корня. Наведите на навык, чтобы подсветить всё, что нужно взять до него.</p>
+    <details class="raw"><summary>исходный json</summary>
       <textarea id="skills-json" rows="10" spellcheck="false"></textarea>
-      <button id="skills-apply">Применить</button>
+      <button id="skills-apply">применить</button>
     </details>
     <div id="skills-errors"></div>
-    <div class="card skill-wrap"><svg id="skills-svg"></svg></div>
+    <div class="panel skill-wrap"><svg id="skills-svg"></svg></div>
   </section>
 
-  <!-- 9. Ассистент -->
+  <!-- 09 Ассистент -->
   <section id="tab-assistant" class="tab">
-    <h2>Ассистент (DeepSeek)</h2>
-    <p class="muted">В API уходят только агрегаты (ниже видно, что именно). Ассистент объясняет, данные не меняет. Ключ хранится только в этом браузере.</p>
+    <header class="head"><span class="num">09</span><h2>Ассистент</h2></header>
+    <p class="lead">Отправляет в DeepSeek сводку по балансу и показывает ответ. Таблицы он не трогает. Ключ остаётся в этом браузере.</p>
     <div class="row">
-      <label class="grow">API-ключ <input id="ai-key" type="password" autocomplete="off" placeholder="sk-…"></label>
-      <label><input id="ai-remember" type="checkbox"> Запомнить</label>
+      <label class="field grow">ключ api <input id="ai-key" type="password" autocomplete="off" placeholder="sk-…"></label>
+      <label class="check"><input id="ai-remember" type="checkbox"> запомнить</label>
     </div>
-    <label>Вопрос <textarea id="ai-question" rows="2">Какие юниты выбиваются из баланса и почему? Что поправить в первую очередь?</textarea></label>
-    <div class="row"><button id="ai-send" class="primary">Спросить ассистента</button><span id="ai-status" class="muted"></span></div>
-    <details><summary>Что будет отправлено</summary><pre id="ai-payload"></pre></details>
-    <div id="ai-answer" class="card answer"></div>
+    <label class="field block">вопрос <textarea id="ai-question" rows="2">Какие юниты выбиваются из баланса и почему? С чего начать правки?</textarea></label>
+    <div class="row"><button id="ai-send" class="primary">спросить</button><span id="ai-status" class="muted small"></span></div>
+    <details class="raw"><summary>что уйдёт в запросе</summary><pre id="ai-payload"></pre></details>
+    <div id="ai-answer" class="panel answer"></div>
   </section>
 </main>
+</div>
 
 <dialog id="help">
-  <h3>Горячие клавиши</h3>
-  <ul>
-    <li><kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> — вкладки</li>
-    <li><kbd>Ctrl/⌘</kbd>+<kbd>E</kbd> — экспорт проекта (JSON)</li>
-    <li><kbd>Ctrl/⌘</kbd>+<kbd>O</kbd> — открыть файл</li>
-    <li><kbd>Alt</kbd>+<kbd>N</kbd> — новая строка в таблице</li>
-    <li><kbd>Alt</kbd>+<kbd>T</kbd> — тёмная/светлая тема</li>
-    <li><kbd>?</kbd> — эта справка</li>
-  </ul>
-  <form method="dialog"><button>Закрыть</button></form>
+  <h3>Клавиши</h3>
+  <dl class="keys">
+    <dt><kbd>Alt</kbd> <kbd>1</kbd>…<kbd>9</kbd></dt><dd>разделы</dd>
+    <dt><kbd>Ctrl/⌘</kbd> <kbd>E</kbd></dt><dd>сохранить проект</dd>
+    <dt><kbd>Ctrl/⌘</kbd> <kbd>O</kbd></dt><dd>открыть файл</dd>
+    <dt><kbd>Alt</kbd> <kbd>N</kbd></dt><dd>новая строка</dd>
+    <dt><kbd>Alt</kbd> <kbd>T</kbd></dt><dd>тема</dd>
+    <dt><kbd>?</kbd></dt><dd>это окно</dd>
+  </dl>
+  <form method="dialog"><button class="primary">закрыть</button></form>
 </dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script src="js/core.js"></script>
 <script src="js/app.js"></script>
 </body>
