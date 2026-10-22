@@ -1,0 +1,9 @@
+{
+  "units": [
+    { "id": 1, "name": "Мечник", "hp": 120, "attack": 25, "defense": 10, "cost": 100 },
+    { "id": 2, "name": "Копейщик", "hp": 100, "attack": 30, "defense": 8, "cost": 110 },
+    { "id": 3, "name": "Лучник", "hp": 80, "attack": 35, "defense": 5, "cost": 120 },
+    { "id": 4, "name": "Рыцарь", "hp": 180, "attack": 20, "defense": 20, "cost": 200 },
+    { "id": 5, "name": "Маг", "hp": 70, "attack": 45, "defense": 3, "cost": 150 }
+  ]
+}

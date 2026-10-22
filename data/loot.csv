@@ -1,0 +1,13 @@
+id,group,item,rarity,chance
+1,goblin,Медная монета,common,45
+2,goblin,Ржавый кинжал,common,25
+3,goblin,Кожаный ремень,uncommon,15
+4,goblin,Зелье лечения,uncommon,10
+5,goblin,Гоблинский амулет,rare,4.5
+6,goblin,Карта сокровищ,epic,0.5
+7,dragon,Золото,common,40
+8,dragon,Чешуя дракона,uncommon,30
+9,dragon,Коготь дракона,rare,18
+10,dragon,Сердце дракона,epic,7
+11,dragon,Яйцо дракона,legendary,3
+12,dragon,Драконий клинок,legendary,2

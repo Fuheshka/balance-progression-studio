@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    { "id": "str1", "name": "Сила I", "cost": 1, "requires": [] },
+    { "id": "agi1", "name": "Ловкость I", "cost": 1, "requires": [] },
+    { "id": "int1", "name": "Интеллект I", "cost": 1, "requires": [] },
+    { "id": "str2", "name": "Сила II", "cost": 2, "requires": ["str1"] },
+    { "id": "cleave", "name": "Рассечение", "cost": 3, "requires": ["str2"] },
+    { "id": "dodge", "name": "Уклонение", "cost": 2, "requires": ["agi1"] },
+    { "id": "crit", "name": "Точный удар", "cost": 3, "requires": ["agi1", "str1"] },
+    { "id": "fire", "name": "Огненный шар", "cost": 2, "requires": ["int1"] },
+    { "id": "shield", "name": "Магический щит", "cost": 2, "requires": ["int1"] },
+    { "id": "spellblade", "name": "Клинок мага", "cost": 4, "requires": ["crit", "fire"] },
+    { "id": "berserk", "name": "Ярость", "cost": 4, "requires": ["cleave", "dodge"] },
+    { "id": "ultimate", "name": "Аватар", "cost": 5, "requires": ["berserk", "spellblade", "shield"] }
+  ]
+}

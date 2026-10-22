@@ -1,0 +1,11 @@
+id,group,item,rarity,chance
+1,chest,Монеты,common,50
+2,chest,Факел,common,20
+3,chest,Верёвка,common,15
+4,chest,Зелье маны,uncommon,10
+5,chest,Свиток,rare,6
+6,chest,Кольцо,epic,1
+7,boss,Броня босса,rare,60
+8,boss,Корона,epic,-5
+9,boss,Пустышка,common,0
+10,boss,Меч босса,rare,35
