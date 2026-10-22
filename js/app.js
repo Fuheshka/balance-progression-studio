@@ -613,7 +613,24 @@
   renderers.skills = renderSkills;
 
   // ================= 09 Ассистент =================
-  try { const k = localStorage.getItem('bps.deepseekKey'); if (k) { $('#ai-key').value = k; $('#ai-remember').checked = true; } } catch (e) { /* без хранилища ключ просто не запоминается */ }
+  // Оба сервиса говорят на OpenAI-совместимом API, отличаются только адресом, моделью и заголовками.
+  const PROVIDERS = {
+    openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', model: 'deepseek/deepseek-chat', keyName: 'Нужен ключ OpenRouter (openrouter.ai/keys)' },
+    deepseek: { url: 'https://api.deepseek.com/chat/completions', model: 'deepseek-chat', keyName: 'Нужен ключ DeepSeek' },
+  };
+  const ls = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* нет хранилища */ } } };
+  const provider = () => $('#ai-provider').value;
+  function loadProvider() {
+    const p = provider();
+    $('#ai-model').value = ls.get('bps.ai.model.' + p) || PROVIDERS[p].model;
+    const k = ls.get('bps.ai.key.' + p) || (p === 'deepseek' ? ls.get('bps.deepseekKey') : null);
+    $('#ai-key').value = k || '';
+    $('#ai-remember').checked = !!k;
+  }
+  $('#ai-provider').value = ls.get('bps.ai.provider') || 'openrouter';
+  loadProvider();
+  $('#ai-provider').addEventListener('change', () => { ls.set('bps.ai.provider', provider()); loadProvider(); });
+  $('#ai-model').addEventListener('change', (e) => ls.set('bps.ai.model.' + provider(), e.target.value.trim() || null));
   function aiPayload() {
     const units = validUnits();
     const audit = units.length >= 3 ? C.audit(units, ttkOpts()) : [];
@@ -630,18 +647,21 @@
     };
   }
   function renderAssistant() { $('#ai-payload').textContent = JSON.stringify(aiPayload(), null, 2); }
-  $('#ai-remember').addEventListener('change', (e) => { try { if (e.target.checked) localStorage.setItem('bps.deepseekKey', $('#ai-key').value.trim()); else localStorage.removeItem('bps.deepseekKey'); } catch (er) { /* нет хранилища */ } });
+  $('#ai-remember').addEventListener('change', (e) => ls.set('bps.ai.key.' + provider(), e.target.checked ? $('#ai-key').value.trim() : null));
   $('#ai-send').addEventListener('click', async () => {
     const key = $('#ai-key').value.trim();
-    if (!key) return toast('Нужен ключ DeepSeek');
-    if ($('#ai-remember').checked) try { localStorage.setItem('bps.deepseekKey', key); } catch (e) { /* нет хранилища */ }
+    const P = PROVIDERS[provider()];
+    if (!key) return toast(P.keyName);
+    if ($('#ai-remember').checked) ls.set('bps.ai.key.' + provider(), key);
     const btn = $('#ai-send'); btn.disabled = true; $('#ai-status').textContent = 'думает…'; $('#ai-answer').textContent = '';
     try {
-      const r = await fetch('https://api.deepseek.com/chat/completions', {
+      const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key };
+      if (provider() === 'openrouter') Object.assign(headers, { 'HTTP-Referer': location.origin, 'X-Title': 'Balance Studio' });
+      const r = await fetch(P.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        headers,
         body: JSON.stringify({
-          model: 'deepseek-chat', temperature: 0.3,
+          model: $('#ai-model').value.trim() || P.model, temperature: 0.3,
           messages: [
             { role: 'system', content: 'Ты геймдизайнер, который занимается балансом. Отвечай по-русски, коротко и по делу, опирайся на конкретные числа из данных. Ничего не выдумывай. Правки предлагай как советы.' },
             { role: 'user', content: $('#ai-question').value + '\n\nДанные баланса (JSON):\n' + JSON.stringify(aiPayload()) },

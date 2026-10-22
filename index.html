@@ -232,7 +232,16 @@
   <!-- 09 Ассистент -->
   <section id="tab-assistant" class="tab">
     <header class="head"><span class="num">09</span><h2>Ассистент</h2></header>
-    <p class="lead">Отправляет в DeepSeek сводку по балансу и показывает ответ. Таблицы он не трогает. Ключ остаётся в этом браузере.</p>
+    <p class="lead">Отправляет в DeepSeek (напрямую или через OpenRouter) сводку по балансу и показывает ответ. Таблицы он не трогает. Ключ остаётся в этом браузере.</p>
+    <div class="row">
+      <label class="field">сервис
+        <select id="ai-provider">
+          <option value="openrouter">OpenRouter</option>
+          <option value="deepseek">DeepSeek напрямую</option>
+        </select>
+      </label>
+      <label class="field">модель <input id="ai-model" type="text" style="width:260px"></label>
+    </div>
     <div class="row">
       <label class="field grow">ключ api <input id="ai-key" type="password" autocomplete="off" placeholder="sk-…"></label>
       <label class="check"><input id="ai-remember" type="checkbox"> запомнить</label>
