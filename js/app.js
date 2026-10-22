@@ -620,17 +620,70 @@
   };
   const ls = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* нет хранилища */ } } };
   const provider = () => $('#ai-provider').value;
+  // Список моделей OpenRouter публичный, ключ не нужен. Берём живой, чтобы не устаревал.
+  let orModels = null;
+  async function fetchModels() {
+    if (orModels) return orModels;
+    const r = await fetch('https://openrouter.ai/api/v1/models');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    orModels = (await r.json()).data.filter((m) => !m.id.endsWith(':batch')).map((m) => {
+      const inP = Number(m.pricing?.prompt) * 1e6, outP = Number(m.pricing?.completion) * 1e6;
+      return { id: m.id, name: m.name || m.id, free: inP === 0 && outP === 0, inP, outP, ctx: m.context_length };
+    });
+    return orModels;
+  }
+  const BIG = ['openai', 'anthropic', 'google', 'deepseek', 'qwen', 'x-ai', 'mistralai', 'meta-llama'];
+  const price = (m) => (m.free ? 'бесплатно' : `$${fmt(m.inP, 2)} / $${fmt(m.outP, 2)} за 1M токенов`);
+  async function renderModels() {
+    const sel = $('#ai-model'), p = provider();
+    const saved = ls.get('bps.ai.model.' + p) || PROVIDERS[p].model;
+    $('#ai-free').parentElement.style.display = $('#ai-model-search').parentElement.style.display = p === 'openrouter' ? '' : 'none';
+    if (p === 'deepseek') {
+      sel.innerHTML = ['deepseek-chat', 'deepseek-reasoner'].map((id) => `<option ${id === saved ? 'selected' : ''}>${id}</option>`).join('');
+      $('#ai-model-info').textContent = '';
+      return;
+    }
+    let list;
+    try { list = await fetchModels(); } catch (e) {
+      sel.innerHTML = `<option>${esc(saved)}</option>`;
+      $('#ai-model-info').textContent = 'Список моделей не загрузился, используется ' + saved;
+      return;
+    }
+    const q = $('#ai-model-search').value.trim().toLowerCase();
+    const only = $('#ai-free').checked;
+    const shown = list.filter((m) => (!only || m.free) && (!q || (m.id + ' ' + m.name).toLowerCase().includes(q)));
+    const vendor = (m) => m.id.split('/')[0];
+    const opt = (m) => `<option value="${esc(m.id)}" ${m.id === saved ? 'selected' : ''}>${esc(m.name)}${m.free && !/free/i.test(m.name) ? ' (free)' : ''}</option>`;
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    const groups = [
+      ['Бесплатные', shown.filter((m) => m.free).sort(byName)],
+      ['Крупные компании', shown.filter((m) => !m.free && BIG.includes(vendor(m))).sort(byName)],
+      ['Остальные', shown.filter((m) => !m.free && !BIG.includes(vendor(m))).sort(byName)],
+    ].filter(([, g]) => g.length);
+    // Сохранённая модель не попала под фильтр: оставляем её первой, чтобы выбор не сбрасывался молча.
+    const keep = !shown.some((m) => m.id === saved) ? `<option value="${esc(saved)}" selected>${esc(saved)}</option>` : '';
+    sel.innerHTML = keep + groups.map(([t, g]) => `<optgroup label="${t} (${g.length})">${g.map(opt).join('')}</optgroup>`).join('');
+    if (!sel.value && shown[0]) sel.value = shown[0].id;
+    showModelInfo();
+  }
+  function showModelInfo() {
+    const m = orModels && orModels.find((x) => x.id === $('#ai-model').value);
+    $('#ai-model-info').textContent = m && provider() === 'openrouter' ? `${price(m)} · контекст ${fmt(m.ctx / 1000, 0)}k` : '';
+  }
   function loadProvider() {
     const p = provider();
-    $('#ai-model').value = ls.get('bps.ai.model.' + p) || PROVIDERS[p].model;
     const k = ls.get('bps.ai.key.' + p) || (p === 'deepseek' ? ls.get('bps.deepseekKey') : null);
     $('#ai-key').value = k || '';
     $('#ai-remember').checked = !!k;
+    renderModels();
   }
   $('#ai-provider').value = ls.get('bps.ai.provider') || 'openrouter';
+  $('#ai-free').checked = ls.get('bps.ai.free') === '1';
   loadProvider();
   $('#ai-provider').addEventListener('change', () => { ls.set('bps.ai.provider', provider()); loadProvider(); });
-  $('#ai-model').addEventListener('change', (e) => ls.set('bps.ai.model.' + provider(), e.target.value.trim() || null));
+  $('#ai-model').addEventListener('change', (e) => { ls.set('bps.ai.model.' + provider(), e.target.value); showModelInfo(); });
+  $('#ai-model-search').addEventListener('input', renderModels);
+  $('#ai-free').addEventListener('change', (e) => { ls.set('bps.ai.free', e.target.checked ? '1' : null); renderModels(); });
   function aiPayload() {
     const units = validUnits();
     const audit = units.length >= 3 ? C.audit(units, ttkOpts()) : [];
@@ -661,7 +714,7 @@
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: $('#ai-model').value.trim() || P.model, temperature: 0.3,
+          model: $('#ai-model').value || P.model, temperature: 0.3,
           messages: [
             { role: 'system', content: 'Ты геймдизайнер, который занимается балансом. Отвечай по-русски, коротко и по делу, опирайся на конкретные числа из данных. Ничего не выдумывай. Правки предлагай как советы.' },
             { role: 'user', content: $('#ai-question').value + '\n\nДанные баланса (JSON):\n' + JSON.stringify(aiPayload()) },
