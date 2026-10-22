@@ -699,6 +699,12 @@
       economy: { start: e.start, steps: e.steps, finalBalance: sim[sim.length - 1].balance, sources: e.sources, sinks: e.sinks },
     };
   }
+  // Ответ модели приходит в Markdown. HTML из него чистим DOMPurify: это чужой текст.
+  function renderMarkdown(el, md) {
+    if (!window.marked || !window.DOMPurify) { el.textContent = md; return; }
+    el.innerHTML = DOMPurify.sanitize(marked.parse(md, { breaks: true }), { FORBID_TAGS: ['img', 'style', 'form', 'input'] });
+    el.querySelectorAll('a').forEach((a) => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
+  }
   function renderAssistant() { $('#ai-payload').textContent = JSON.stringify(aiPayload(), null, 2); }
   $('#ai-remember').addEventListener('change', (e) => ls.set('bps.ai.key.' + provider(), e.target.checked ? $('#ai-key').value.trim() : null));
   $('#ai-send').addEventListener('click', async () => {
@@ -723,7 +729,7 @@
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error((j.error && j.error.message) || 'HTTP ' + r.status);
-      $('#ai-answer').textContent = j.choices?.[0]?.message?.content || '(ответ пустой)';
+      renderMarkdown($('#ai-answer'), j.choices?.[0]?.message?.content || '(ответ пустой)');
       $('#ai-status').textContent = '';
     } catch (e) {
       $('#ai-status').textContent = '';
